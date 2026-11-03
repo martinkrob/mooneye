@@ -1,0 +1,344 @@
+<!doctype html>
+<html lang="cs">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>MoonEye</title>
+    <link rel="icon" href="img/logo.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="css/app.css">
+    <!-- Apply the saved theme before first paint, so a dark-mode user never sees a white flash. -->
+    <script>
+        (function () {
+            var mode = "auto";
+            try { mode = localStorage.getItem("mooneye.theme") || "auto"; } catch (e) { /* private mode */ }
+            var dark = mode === "dark" || (mode === "auto" && window.matchMedia("(prefers-color-scheme: dark)").matches);
+            document.documentElement.dataset.theme = dark ? "dark" : "light";
+        })();
+    </script>
+    <script type="module" src="js/app.js"></script>
+</head>
+<body>
+<header class="topbar">
+    <div class="brand">
+        <img class="brand-logo" src="img/logo.svg" alt="" width="32" height="32">
+        <span class="brand-name">MoonEye</span>
+        <span class="brand-tagline">3D Printer AI monitoring service</span>
+    </div>
+    <div class="topbar-right">
+        <span class="health" id="health" title="Zjišťuji stav…">
+            <span class="dot dot-muted"></span><span class="health-text">Zjišťuji stav…</span>
+        </span>
+        <div class="menu-anchor">
+            <button class="icon-btn icon-btn-on-dark" id="main-menu-btn" aria-haspopup="menu" aria-expanded="false" aria-label="Menu">
+                <svg class="icon"><use href="img/icons.svg#menu"/></svg>
+            </button>
+            <div class="menu" id="main-menu" role="menu" hidden>
+                <button role="menuitem" data-action="add-printer"><svg class="icon"><use href="img/icons.svg#plus"/></svg>Přidat tiskárnu</button>
+                <hr>
+                <button role="menuitem" data-action="settings"><svg class="icon"><use href="img/icons.svg#gear"/></svg>Nastavení</button>
+                <button role="menuitem" data-action="events"><svg class="icon"><use href="img/icons.svg#list"/></svg>Záznam událostí</button>
+                <hr>
+                <div class="menu-group" role="group" aria-label="Vzhled">
+                    <span class="menu-label">Vzhled</span>
+                    <div class="segmented" id="theme-switch">
+                        <button data-theme-mode="light" title="Světlý"><svg class="icon"><use href="img/icons.svg#sun"/></svg>Světlý</button>
+                        <button data-theme-mode="dark" title="Tmavý"><svg class="icon"><use href="img/icons.svg#moon"/></svg>Tmavý</button>
+                        <button data-theme-mode="auto" title="Podle systému"><svg class="icon"><use href="img/icons.svg#auto"/></svg>Systém</button>
+                    </div>
+                </div>
+                <hr>
+                <button role="menuitem" data-action="about"><svg class="icon"><use href="img/icons.svg#info"/></svg>O aplikaci</button>
+            </div>
+        </div>
+    </div>
+</header>
+
+<main class="content">
+    <section id="printers" class="printers" aria-live="polite"></section>
+    <section id="empty" class="empty" hidden>
+        <img src="img/logo.svg" alt="" width="64" height="64">
+        <h2>Zatím tu není žádná tiskárna</h2>
+        <p>Přidej tiskárnu s Klipperem a Moonrakerem. MoonEye pak bude sledovat její kameru a při selhání tisk pozastaví.</p>
+        <button class="btn btn-primary" data-action="add-printer">
+            <svg class="icon"><use href="img/icons.svg#plus"/></svg>Přidat tiskárnu
+        </button>
+    </section>
+</main>
+
+<!-- Card menu: one shared instance, positioned next to the "⋯" button that opened it. -->
+<div class="menu menu-floating" id="card-menu" role="menu" hidden>
+    <button role="menuitem" data-card-action="live"><svg class="icon"><use href="img/icons.svg#play"/></svg>Živý náhled</button>
+    <button role="menuitem" data-card-action="history" disabled title="Připravujeme"><svg class="icon"><use href="img/icons.svg#history"/></svg>Historie tisků<span class="soon">brzy</span></button>
+    <button role="menuitem" data-card-action="edit"><svg class="icon"><use href="img/icons.svg#edit"/></svg>Upravit</button>
+    <button role="menuitem" data-card-action="analyse"><svg class="icon"><use href="img/icons.svg#target"/></svg>Otestovat detekci teď</button>
+    <button role="menuitem" data-card-action="mute"><svg class="icon"><use href="img/icons.svg#bell-off"/></svg>Ztlumit do konce tisku</button>
+    <button role="menuitem" data-card-action="reset"><svg class="icon"><use href="img/icons.svg#reset"/></svg>Vynulovat základní úroveň</button>
+    <hr>
+    <button role="menuitem" class="danger" data-card-action="delete"><svg class="icon"><use href="img/icons.svg#trash"/></svg>Smazat tiskárnu</button>
+</div>
+
+<!-- Printer form: a drawer from the right (full screen on a phone). -->
+<dialog class="drawer" id="printer-form">
+    <form method="dialog" novalidate>
+        <header class="drawer-head">
+            <h2 id="pf-title">Přidat tiskárnu</h2>
+            <button type="button" class="icon-btn" data-close aria-label="Zavřít"><svg class="icon"><use href="img/icons.svg#close"/></svg></button>
+        </header>
+        <nav class="tabs" role="tablist">
+            <button type="button" role="tab" data-tab="connection" aria-selected="true">Připojení</button>
+            <button type="button" role="tab" data-tab="detection" aria-selected="false">Detekce</button>
+            <button type="button" role="tab" data-tab="notifications" aria-selected="false">Oznámení</button>
+        </nav>
+        <div class="drawer-body">
+            <section class="tab-panel" data-panel="connection">
+                <label class="field">
+                    <span>Název</span>
+                    <input name="name" required maxlength="100" placeholder="např. Voron 2.4">
+                </label>
+                <label class="field">
+                    <span>Adresa Moonrakeru</span>
+                    <input name="moonrakerUrl" required placeholder="192.168.1.50 nebo http://voron.local:7125">
+                    <small>Stačí IP adresa nebo název; port 7125 se doplní sám.</small>
+                </label>
+                <label class="field">
+                    <span>API klíč <em>(nepovinné)</em></span>
+                    <input name="apiKey" type="password" autocomplete="off">
+                    <small data-hint="apiKey">Jen pokud má Moonraker zapnuté ověřování.</small>
+                </label>
+                <div class="field-actions">
+                    <button type="button" class="btn" data-test="moonraker">Otestovat připojení</button>
+                    <span class="test-result" data-result="moonraker"></span>
+                </div>
+                <label class="field">
+                    <span>Snímek z kamery (URL)</span>
+                    <input name="webcamUrl" placeholder="http://192.168.1.50/webcam/?action=snapshot">
+                    <small>Adresa jednoho snímku, ne streamu. Bez kamery detekce neběží.</small>
+                </label>
+                <div class="field-actions">
+                    <button type="button" class="btn" data-test="camera">Otestovat kameru</button>
+                    <span class="test-result" data-result="camera"></span>
+                </div>
+                <img class="camera-test" data-camera-test alt="Snímek z kamery" hidden>
+                <label class="check">
+                    <input type="checkbox" name="enabled">
+                    <span>Tiskárna je aktivní <small>(vypnutá se vůbec nesleduje)</small></span>
+                </label>
+            </section>
+
+            <section class="tab-panel" data-panel="detection" hidden>
+                <label class="check">
+                    <input type="checkbox" name="detectionEnabled">
+                    <span>Hlídat tisk kamerou</span>
+                </label>
+                <fieldset class="field">
+                    <legend>Při selhání</legend>
+                    <label class="radio"><input type="radio" name="onFailure" value="PAUSE"> <span>Pozastavit tisk a upozornit</span></label>
+                    <label class="radio"><input type="radio" name="onFailure" value="NOTIFY"> <span>Jen upozornit</span></label>
+                </fieldset>
+                <label class="field">
+                    <span>Citlivost <output data-sensitivity-value>1,0</output></span>
+                    <input name="sensitivity" type="range" min="0.5" max="2" step="0.1">
+                    <div class="range-labels"><small>tolerantní</small><small>výchozí 1,0</small><small>citlivá</small></div>
+                </label>
+                <div class="field">
+                    <span class="field-label">Výřez sledované oblasti</span>
+                    <small>Táhni myší přes snímek a vyber jen podložku. Model pak nebude reagovat na kabely, cívku nebo okolí tiskárny.</small>
+                    <div class="roi-editor" data-roi-editor>
+                        <img data-roi-image alt="">
+                        <div class="roi-rect" data-roi-rect hidden></div>
+                        <div class="roi-placeholder" data-roi-placeholder>Snímek se načte z kamery</div>
+                    </div>
+                    <div class="field-actions">
+                        <button type="button" class="btn" data-roi-load>Načíst snímek</button>
+                        <button type="button" class="btn" data-roi-clear>Celý snímek</button>
+                        <span class="test-result" data-roi-info></span>
+                    </div>
+                </div>
+            </section>
+
+            <section class="tab-panel" data-panel="notifications" hidden>
+                <h3>Webhook</h3>
+                <label class="field">
+                    <span>URL</span>
+                    <input name="webhookUrl" placeholder="http://homeassistant.local:8123/api/webhook/…">
+                </label>
+                <label class="check"><input type="checkbox" name="webhookTelemetry"><span>Posílat i průběžnou telemetrii (každých 10 s)</span></label>
+
+                <h3>MQTT</h3>
+                <div class="grid-2">
+                    <label class="field"><span>Broker</span><input name="mqttBroker" placeholder="192.168.1.10:1883"></label>
+                    <label class="field"><span>Topic</span><input name="mqttTopic" placeholder="mooneye/voron"></label>
+                    <label class="field"><span>Uživatel</span><input name="mqttUsername" autocomplete="off"></label>
+                    <label class="field"><span>Heslo</span><input name="mqttPassword" type="password" autocomplete="off"></label>
+                    <label class="field"><span>Client ID <em>(nepovinné)</em></span><input name="mqttClientId"></label>
+                </div>
+                <label class="check"><input type="checkbox" name="mqttTelemetry"><span>Posílat i průběžnou telemetrii</span></label>
+
+                <h3>Displej tiskárny</h3>
+                <label class="check"><input type="checkbox" name="m117Status"><span>Zobrazovat riziko selhání na displeji a v Mainsailu (M117)</span></label>
+
+                <div class="field-actions">
+                    <button type="button" class="btn" data-test="notification">Poslat zkušební oznámení</button>
+                    <span class="test-result" data-result="notification"></span>
+                </div>
+            </section>
+        </div>
+        <footer class="drawer-foot">
+            <span class="form-error" data-form-error></span>
+            <button type="button" class="btn" data-close>Zrušit</button>
+            <button type="submit" class="btn btn-primary" data-save>Uložit</button>
+        </footer>
+    </form>
+</dialog>
+
+<dialog class="modal" id="settings-dialog">
+    <form method="dialog" novalidate>
+        <header class="modal-head">
+            <h2>Nastavení</h2>
+            <button type="button" class="icon-btn" data-close aria-label="Zavřít"><svg class="icon"><use href="img/icons.svg#close"/></svg></button>
+        </header>
+        <div class="modal-body">
+            <h3>Historie</h3>
+            <label class="field">
+                <span>Uchovávat posledních tisků na tiskárnu</span>
+                <input name="retentionPrintCount" type="number" min="1" max="1000" step="1">
+                <small>Starší tisky se smažou včetně snímků. Incidenty, které jsi ohodnotil, zůstávají vždy.</small>
+            </label>
+            <h3>Snímky</h3>
+            <label class="field">
+                <span>Ukládat snímek během tisku každých (sekund)</span>
+                <input name="snapshotIntervalSec" type="number" min="0" max="3600" step="10">
+                <small>0 = ukládat jen snímky, které model vyhodnotil jako podezřelé.</small>
+            </label>
+            <h3>Systém</h3>
+            <dl class="facts" data-system></dl>
+        </div>
+        <footer class="modal-foot">
+            <span class="form-error" data-form-error></span>
+            <button type="button" class="btn" data-close>Zrušit</button>
+            <button type="submit" class="btn btn-primary">Uložit</button>
+        </footer>
+    </form>
+</dialog>
+
+<dialog class="modal modal-wide" id="events-dialog">
+    <header class="modal-head">
+        <h2>Záznam událostí</h2>
+        <button type="button" class="icon-btn" data-close aria-label="Zavřít"><svg class="icon"><use href="img/icons.svg#close"/></svg></button>
+    </header>
+    <div class="modal-body">
+        <table class="table">
+            <thead><tr><th>Čas</th><th>Tiskárna</th><th>Událost</th><th>Podrobnosti</th></tr></thead>
+            <tbody data-events></tbody>
+        </table>
+    </div>
+</dialog>
+
+<dialog class="modal" id="about-dialog">
+    <header class="modal-head">
+        <h2>O aplikaci</h2>
+        <button type="button" class="icon-btn" data-close aria-label="Zavřít"><svg class="icon"><use href="img/icons.svg#close"/></svg></button>
+    </header>
+    <div class="modal-body about">
+        <img src="img/logo.svg" alt="" width="56" height="56">
+        <p><strong>MoonEye</strong> <span data-version></span><br>3D Printer AI monitoring service</p>
+        <p>Sleduje kameru tiskárny s Klipperem, rozpozná selhání tisku (spaghetti, odlepení, chuchvalce)
+            a přes Moonraker tisk pozastaví. Vše běží lokálně, bez cloudu.</p>
+        <p>Model a rozhodovací algoritmus pocházejí z open-source projektu
+            <a href="https://github.com/TheSpaghettiDetective/obico-server" target="_blank" rel="noopener">Obico</a>
+            (licence AGPL-3.0). Váhy modelu se stahují z obico.io při prvním spuštění.</p>
+    </div>
+</dialog>
+
+<dialog class="modal modal-wide" id="live-dialog">
+    <header class="modal-head">
+        <h2 data-live-title>Živý náhled</h2>
+        <button type="button" class="icon-btn" data-close aria-label="Zavřít"><svg class="icon"><use href="img/icons.svg#close"/></svg></button>
+    </header>
+    <div class="modal-body live">
+        <div class="frame frame-large" data-live-frame>
+            <img alt="Snímek z kamery">
+            <div class="boxes"></div>
+            <div class="frame-placeholder" hidden></div>
+        </div>
+        <div class="live-side">
+            <div data-live-risk></div>
+            <dl class="facts" data-live-facts></dl>
+        </div>
+    </div>
+</dialog>
+
+<dialog class="modal modal-wide" id="analyse-dialog">
+    <header class="modal-head">
+        <h2>Test detekce</h2>
+        <button type="button" class="icon-btn" data-close aria-label="Zavřít"><svg class="icon"><use href="img/icons.svg#close"/></svg></button>
+    </header>
+    <div class="modal-body live">
+        <div class="frame frame-large" data-analyse-frame>
+            <img alt="Analyzovaný snímek">
+            <div class="boxes"></div>
+            <div class="frame-placeholder" hidden></div>
+        </div>
+        <div class="live-side">
+            <p data-analyse-summary>Analyzuji snímek…</p>
+            <p class="muted small">Jednorázová analýza aktuálního snímku. Nic se neukládá a neovlivňuje
+                průběžné hodnocení tisku. Rámečky ukazují vše, co model považuje za selhání,
+                i s nízkou jistotou.</p>
+        </div>
+    </div>
+</dialog>
+
+<dialog class="modal modal-small" id="confirm-dialog">
+    <form method="dialog">
+        <div class="modal-body">
+            <h2 data-confirm-title></h2>
+            <p data-confirm-text></p>
+        </div>
+        <footer class="modal-foot">
+            <button value="cancel" class="btn">Zrušit</button>
+            <button value="ok" class="btn btn-primary" data-confirm-ok>Potvrdit</button>
+        </footer>
+    </form>
+</dialog>
+
+<div class="toasts" id="toasts" aria-live="polite"></div>
+
+<template id="printer-card">
+    <article class="card printer">
+        <header class="printer-head">
+            <div class="printer-id">
+                <h2 class="printer-name"></h2>
+                <span class="printer-host"></span>
+                <span class="badge"></span>
+            </div>
+            <label class="switch" title="Hlídat tisk kamerou">
+                <span>Hlídání</span>
+                <input type="checkbox" class="watch-toggle">
+                <span class="switch-track"><span class="switch-thumb"></span></span>
+            </label>
+            <button class="icon-btn card-menu-btn" aria-haspopup="menu" aria-label="Akce tiskárny">
+                <svg class="icon"><use href="img/icons.svg#dots"/></svg>
+            </button>
+        </header>
+        <div class="printer-body">
+            <button class="frame frame-thumb" title="Živý náhled">
+                <img alt="Kamera" loading="lazy">
+                <div class="boxes"></div>
+                <div class="frame-placeholder" hidden></div>
+                <span class="frame-expand"><svg class="icon"><use href="img/icons.svg#expand"/></svg></span>
+            </button>
+            <div class="printer-info">
+                <div class="job">
+                    <div class="job-file"></div>
+                    <div class="progress"><div class="progress-fill"></div></div>
+                    <div class="job-meta"></div>
+                </div>
+                <dl class="readings"></dl>
+                <div class="risk"></div>
+                <div class="printer-foot"></div>
+            </div>
+        </div>
+    </article>
+</template>
+</body>
+</html>

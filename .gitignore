@@ -1,0 +1,4 @@
+/target/
+# Runtime data: database, downloaded model, snapshots
+/data/
+*.onnx

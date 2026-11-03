@@ -1,0 +1,19 @@
+# podman-compose up -d   (or: docker compose up -d - then remove `userns_mode`)
+services:
+  mooneye:
+    build: .
+    image: localhost/mooneye:latest
+    container_name: mooneye
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    volumes:
+      # Database, the downloaded model (~200 MB, fetched on first start) and print snapshots.
+      - ./data:/data:Z
+    # Rootless podman: run as your own UID inside the container so ./data stays yours.
+    userns_mode: keep-id
+    environment:
+      - TZ=Europe/Prague
+      # Optional:
+      # - MOONEYE_TELEMETRY_INTERVAL_MS=1000   # Moonraker polling period, 0 = off
+      # - MOONEYE_MODEL_URL=                   # empty = never download, put the model in ./data/models yourself
