@@ -1,4 +1,10 @@
-# podman-compose up -d   (or: docker compose up -d - then remove `userns_mode`)
+# podman-compose up -d   (or: docker compose up -d - then remove `userns_mode` and `x-podman`)
+
+# podman-compose puts services into a pod by default, and podman refuses `userns_mode` inside
+# a pod ("--userns and --pod cannot be set together"). One service needs no pod.
+x-podman:
+  in_pod: false
+
 services:
   mooneye:
     build: .

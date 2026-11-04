@@ -61,7 +61,7 @@ Open `http://<host>:8080`. On the first start MoonEye downloads the model (~200 
 `./data/models` and verifies its checksum. The status dot in the header turns green when detection
 is ready.
 
-With Docker instead of podman, remove the `userns_mode` line from `compose.yml` and use
+With Docker instead of podman, remove `userns_mode` and the `x-podman` block from `compose.yml` and use
 `docker compose up -d`.
 
 ### Add a printer

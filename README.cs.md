@@ -59,7 +59,7 @@ Otevři `http://<adresa>:8080`. Při prvním startu si MoonEye stáhne model (~2
 `./data/models` a ověří jeho kontrolní součet. Jakmile je detekce připravená, tečka v záhlaví
 zezelená.
 
-V Dockeru místo podmanu odstraň z `compose.yml` řádek `userns_mode` a spusť `docker compose up -d`.
+V Dockeru místo podmanu odstraň z `compose.yml` řádek `userns_mode` a blok `x-podman` a spusť `docker compose up -d`.
 
 ### Přidání tiskárny
 
